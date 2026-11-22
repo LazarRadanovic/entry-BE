@@ -1,6 +1,6 @@
 # Entry: backend
 
-Backend for an app for the residents of one building entrance: feed, chat, polls, notifications.
+Backend for an app for the residents of one building entrance: feed, chat, polls, costs, craftsmen, notifications.
 Built with Spring Boot 4.2 (Java 21), PostgreSQL, JWT, REST + STOMP over WebSocket, and Web Push.
 The frontend (Angular PWA) lives in `../entry FE`.
 
@@ -133,6 +133,19 @@ with `?cursor=…`. `size` is optional.
 | POST | `/api/polls` | `{question, expiresAt?}` (ISO-8601; must be in the future; at most 1 year) |
 | GET / DELETE | `/api/polls/{id}` | delete: author or admin |
 | PUT / DELETE | `/api/polls/{id}/vote` | PUT `{value: true\|false}`; changeable until expiry; 409 `POLL_EXPIRED` after |
+| **Costs** (building cleaning, garage, repairs…) | | |
+| GET | `/api/costs` | active costs: `{id, name, type: PER_APARTMENT\|BY_AREA, amount, currency, recurrence: MONTHLY\|ONE_TIME, appliesToAll, unitIds, dueDate, missingArea}` |
+| GET | `/api/costs/{id}/table?year=` | apartments the cost applies to, each with `share` and `paid` (12 months, or 1 slot for one-time) |
+| GET | `/api/costs/mine?year=` | costs of the caller's apartment |
+| GET | `/api/units` | apartments (residents' apartments are added automatically), with `areaM2` |
+| POST / PUT / DELETE | `/api/admin/costs`, `/api/admin/costs/{id}` | `{name, description?, type, amount, currency, recurrence, dueDate?, appliesToAll, unitIds}`; BY_AREA splits `amount` by m²; delete archives a cost that has payments |
+| PUT | `/api/admin/costs/{id}/units` | `{appliesToAll, unitIds}` |
+| PUT | `/api/admin/costs/payments` | `{costId, unitId, period: "YYYY-MM"\|"ONCE", paid}` |
+| POST / PUT / DELETE | `/api/admin/units`, `/api/admin/units/{id}` | POST `{floor, apartment, areaM2?}`, PUT `{areaM2}`; only apartments without residents can be removed |
+| **Craftsmen** | | |
+| GET | `/api/craftsmen?trade=` | most recommended first |
+| POST / PUT / DELETE | `/api/craftsmen`, `/api/craftsmen/{id}` | `{name, trade, phone, email?, website?, description?, photoFileId?}` (photo from `POST /api/files`); edit: author or admin |
+| PUT / DELETE | `/api/craftsmen/{id}/recommend` | → `{craftsmanId, recommendations, recommendedByMe}` |
 | **Notifications** | | |
 | GET | `/api/notifications?cursor=&size=` | |
 | GET | `/api/notifications/unread-count` | |
@@ -163,6 +176,7 @@ Only active members can connect, and only to their own entrance's topics. Each m
 | `/topic/entrance/{entranceId}/feed` | `POST_CREATED` (PostDto), `POST_DELETED` `{postId}`, `POST_STATS` `{postId, likeCount, commentCount}`, `COMMENT_CREATED` (CommentDto) |
 | `/topic/entrance/{entranceId}/chat` | `MESSAGE_CREATED` (ChatMessageDto) |
 | `/topic/entrance/{entranceId}/polls` | `POLL_CREATED` (PollDto), `POLL_RESULTS` `{pollId, yesCount, noCount, totalVotes, yesPercent, noPercent}`, `POLL_DELETED` `{pollId}` |
+| `/topic/entrance/{entranceId}/fees` | `FEES_UPDATED` `{}` (a cost, payment or apartment changed: reload) |
 | `/topic/entrance/{entranceId}/presence` | `PRESENCE` `{userId, online, onlineUserIds}` |
 | `/user/queue/notifications` | `NOTIFICATION` (NotificationDto) |
 
@@ -181,6 +195,8 @@ src/main/java/com/entry/
   poll/          yes/no polls, votes, results
   notification/  in-app notifications, settings, dispatcher (event -> STOMP / push)
   push/          Web Push: subscriptions, RFC 8291 encryption, VAPID
+  fee/           entrance costs: apartments (units), costs, assignments, area split, payments
+  craftsman/     craftsmen directory + recommendations
   billing/       free trial + Stripe subscriptions, access policy, webhook, trial reminders
   realtime/      STOMP config, CONNECT auth, presence, event relay
   security/      JWT config, principal (AuthUser), HTTP security rules
