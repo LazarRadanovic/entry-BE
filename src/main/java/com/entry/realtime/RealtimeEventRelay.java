@@ -1,7 +1,7 @@
 package com.entry.realtime;
 
 import com.entry.chat.event.ChatMessageCreatedEvent;
-import com.entry.fee.FeesChangedEvent;
+import com.entry.fee.CostsChangedEvent;
 import com.entry.feed.event.CommentCreatedEvent;
 import com.entry.feed.event.PostCreatedEvent;
 import com.entry.feed.event.PostDeletedEvent;
@@ -73,12 +73,12 @@ public class RealtimeEventRelay {
                 new RealtimeEvent("POLL_DELETED", Map.of("pollId", e.pollId())));
     }
 
-    // ---- cleaning fees ----
+    // ---- costs (topic kept as "fees" for existing clients) ----
 
     @TransactionalEventListener
-    public void on(FeesChangedEvent e) {
+    public void on(CostsChangedEvent e) {
         broker.convertAndSend(Topics.entrancePrefix(e.entranceId()) + "fees",
-                new RealtimeEvent("FEES_UPDATED", Map.of("year", e.year())));
+                new RealtimeEvent("FEES_UPDATED", Map.of()));
     }
 
     // ---- presence (not transactional: comes from WebSocket session events) ----

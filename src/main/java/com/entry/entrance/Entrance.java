@@ -6,7 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
@@ -35,15 +34,6 @@ public class Entrance {
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
-
-    // ---- cleaning fee (see com.entry.fee) ----
-
-    /** Monthly cleaning fee per apartment; null until the admin sets it. */
-    @Column(name = "fee_amount", precision = 10, scale = 2)
-    private BigDecimal feeAmount;
-
-    @Column(name = "fee_currency", nullable = false, length = 3)
-    private String feeCurrency = "RSD";
 
     // ---- billing (see com.entry.billing) ----
 
