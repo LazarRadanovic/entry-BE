@@ -1,0 +1,47 @@
+Tech Stack
+Frontend: Angular (latest stable version) + PWA (service worker, web app manifest, offline support)
+Backend: Spring Boot 3 + Spring Security + JWT
+Database: PostgreSQL
+Real-time chat: WebSocket (Spring WebSocket + STOMP)
+Image upload: Local storage + thumbnail generation (or MinIO/S3 if straightforward)
+Authentication: JWT + refresh token
+Core Features
+Authentication & Entrance Management
+Registration / Login
+Users are associated with a specific entrance (e.g. "Entrance 3 - Belgrade Street 12")
+Entrance admin can approve new members
+Roles: RESIDENT, ENTRANCE_ADMIN
+
+Entrance Residents Chat
+Real-time chat available only to members of the same entrance
+Messages: text + ability to send images
+List of online users
+Notifications (push notifications via PWA + WebSocket)
+
+Feed / Photo Posts
+Residents can create posts with one or more images + text
+Likes and comments
+Feed filtered by entrance
+
+Polls (Yes / No questions)
+Anyone can create a poll (question + yes/no options)
+Only entrance members can vote
+Real-time results display (percentage + vote count)
+Polls can have an expiration date
+
+Additional Features
+List of entrance residents
+User profile (first name, last name, floor/apartment, profile picture)
+Notifications (new message, new poll, new post)
+
+Project Structure
+Monorepo or two separate folders (frontend/ and backend/)
+Frontend as Angular PWA (manifest.json, service worker, offline fallback)
+Backend: clean REST + WebSocket API
+Docker-compose for local development (PostgreSQL + backend + frontend)
+Additional Requirements
+Clean, modern UI (mobile-first, since it’s a PWA)
+Fully responsive (works well on both mobile and desktop)
+Clean code, good folder structure, DTOs, validation
+Basic error handling and loading states
+README with clear instructions on how to run the project

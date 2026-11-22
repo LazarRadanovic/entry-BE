@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: entry-backend
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/entry}
+    username: ${DB_USERNAME:entry}
+    password: ${DB_PASSWORD:entry}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+
+app:
+  jwt:
+    # Base64-encoded HMAC key, at least 32 bytes. ALWAYS override JWT_SECRET outside local dev.
+    secret: ${JWT_SECRET:ZGV2LW9ubHktc2VjcmV0LWNoYW5nZS1tZS1pbi1wcm9kdWN0aW9uLTAxMjM0NTY3ODk=}
+    issuer: entry
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+  cookie:
+    secure: ${COOKIE_SECURE:false}
+    same-site: Lax
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+  storage:
+    local-dir: ${STORAGE_DIR:./uploads}
+    # Signed image URLs stay valid at least this long (they change once per day so browsers/SW can cache them).
+    url-ttl: 2d
+  push:
+    # Web Push (VAPID) keys. Leave empty to disable push. Generate with: npx web-push generate-vapid-keys
+    vapid-public-key: ${VAPID_PUBLIC_KEY:}
+    vapid-private-key: ${VAPID_PRIVATE_KEY:}
+    subject: ${VAPID_SUBJECT:mailto:admin@example.com}
+  billing:
+    # New entrances get a free trial, then need a Stripe subscription. Without Stripe keys nothing is enforced.
+    trial-days: ${BILLING_TRIAL_DAYS:30}
+    stripe-secret-key: ${STRIPE_SECRET_KEY:}
+    stripe-webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    stripe-price-id: ${STRIPE_PRICE_ID:}
+    # Shown in the UI next to the Subscribe button, e.g. "€4.99 / month"
+    price-label: ${BILLING_PRICE_LABEL:}
+    # Public URL of the frontend (Stripe redirects back here after checkout)
+    app-url: ${APP_URL:http://localhost:4200}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
