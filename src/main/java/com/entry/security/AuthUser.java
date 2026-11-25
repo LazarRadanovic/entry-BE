@@ -10,12 +10,12 @@ import java.util.UUID;
  * approvals, removals and role changes take effect immediately (not after the JWT expires).
  * Inject it in controllers with {@code @AuthenticationPrincipal AuthUser me}.
  */
-public record AuthUser(UUID id, UUID entranceId, Role role, UserStatus status, boolean entranceLocked) {
+public record AuthUser(UUID id, UUID entranceId, Role role, UserStatus status, boolean entranceReadOnly) {
 
-    /** {@code entranceLocked}: trial over without a subscription (see BillingPolicy). */
-    public static AuthUser from(User user, boolean entranceLocked) {
+    /** {@code entranceReadOnly}: trial over without a subscription (see BillingPolicy): reading only. */
+    public static AuthUser from(User user, boolean entranceReadOnly) {
         return new AuthUser(user.getId(), user.getEntrance().getId(), user.getRole(), user.getStatus(),
-                entranceLocked);
+                entranceReadOnly);
     }
 
     public boolean isAdmin() {

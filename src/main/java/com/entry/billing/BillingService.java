@@ -155,7 +155,7 @@ public class BillingService {
         return new BillingDto(
                 policy.isEnabled(),
                 state,
-                state != BillingState.EXPIRED,
+                state == BillingState.EXPIRED,
                 e.getTrialEndsAt(),
                 daysLeft,
                 e.getCurrentPeriodEnd(),

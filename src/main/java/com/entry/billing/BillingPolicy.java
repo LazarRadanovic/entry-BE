@@ -8,7 +8,7 @@ import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-/** Decides whether an entrance may use the app right now. Pure logic, no I/O. */
+/** Decides whether an entrance may use the app fully or only read. Pure logic, no I/O. */
 @Component
 public class BillingPolicy {
 
@@ -53,7 +53,8 @@ public class BillingPolicy {
         return BillingState.EXPIRED;
     }
 
-    public boolean accessAllowed(Entrance e) {
-        return state(e) != BillingState.EXPIRED;
+    /** Trial over without a subscription: residents can still read everything, but not post or change anything. */
+    public boolean readOnly(Entrance e) {
+        return state(e) == BillingState.EXPIRED;
     }
 }

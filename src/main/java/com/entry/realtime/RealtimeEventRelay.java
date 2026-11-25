@@ -1,11 +1,17 @@
 package com.entry.realtime;
 
+import com.entry.announcement.event.AnnouncementCreatedEvent;
+import com.entry.announcement.event.AnnouncementDeletedEvent;
+import com.entry.announcement.event.AnnouncementUpdatedEvent;
 import com.entry.chat.event.ChatMessageCreatedEvent;
 import com.entry.fee.CostsChangedEvent;
 import com.entry.feed.event.CommentCreatedEvent;
 import com.entry.feed.event.PostCreatedEvent;
 import com.entry.feed.event.PostDeletedEvent;
 import com.entry.feed.event.PostStatsChangedEvent;
+import com.entry.lostfound.event.LostFoundCreatedEvent;
+import com.entry.lostfound.event.LostFoundDeletedEvent;
+import com.entry.lostfound.event.LostFoundUpdatedEvent;
 import com.entry.poll.event.PollCreatedEvent;
 import com.entry.poll.event.PollDeletedEvent;
 import com.entry.poll.event.PollResultsChangedEvent;
@@ -71,6 +77,44 @@ public class RealtimeEventRelay {
     public void on(PollDeletedEvent e) {
         broker.convertAndSend(Topics.polls(e.entranceId()),
                 new RealtimeEvent("POLL_DELETED", Map.of("pollId", e.pollId())));
+    }
+
+    // ---- noise announcements ----
+
+    @TransactionalEventListener
+    public void on(AnnouncementCreatedEvent e) {
+        broker.convertAndSend(Topics.announcements(e.entranceId()),
+                new RealtimeEvent("ANNOUNCEMENT_CREATED", e.announcement()));
+    }
+
+    @TransactionalEventListener
+    public void on(AnnouncementUpdatedEvent e) {
+        broker.convertAndSend(Topics.announcements(e.entranceId()),
+                new RealtimeEvent("ANNOUNCEMENT_UPDATED", e.announcement()));
+    }
+
+    @TransactionalEventListener
+    public void on(AnnouncementDeletedEvent e) {
+        broker.convertAndSend(Topics.announcements(e.entranceId()),
+                new RealtimeEvent("ANNOUNCEMENT_DELETED", Map.of("announcementId", e.announcementId())));
+    }
+
+    // ---- lost & found ----
+
+    @TransactionalEventListener
+    public void on(LostFoundCreatedEvent e) {
+        broker.convertAndSend(Topics.lostFound(e.entranceId()), new RealtimeEvent("LOST_FOUND_CREATED", e.item()));
+    }
+
+    @TransactionalEventListener
+    public void on(LostFoundUpdatedEvent e) {
+        broker.convertAndSend(Topics.lostFound(e.entranceId()), new RealtimeEvent("LOST_FOUND_UPDATED", e.item()));
+    }
+
+    @TransactionalEventListener
+    public void on(LostFoundDeletedEvent e) {
+        broker.convertAndSend(Topics.lostFound(e.entranceId()),
+                new RealtimeEvent("LOST_FOUND_DELETED", Map.of("itemId", e.itemId())));
     }
 
     // ---- costs (topic kept as "fees" for existing clients) ----

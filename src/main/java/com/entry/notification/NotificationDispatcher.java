@@ -1,6 +1,12 @@
 package com.entry.notification;
 
+import com.entry.announcement.dto.AnnouncementDto;
+import com.entry.announcement.event.AnnouncementCreatedEvent;
 import com.entry.billing.TrialEndingEvent;
+import com.entry.lostfound.LostFoundKind;
+import com.entry.lostfound.dto.LostFoundDto;
+import com.entry.lostfound.event.LostFoundCreatedEvent;
+import com.entry.lostfound.event.LostFoundRespondedEvent;
 import com.entry.chat.event.ChatMessageCreatedEvent;
 import com.entry.entrance.EntranceRepository;
 import com.entry.feed.event.CommentCreatedEvent;
@@ -20,6 +26,7 @@ import com.entry.user.dto.ResidentDto;
 import com.entry.user.event.JoinRequestedEvent;
 import com.entry.user.event.MemberApprovedEvent;
 import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -119,6 +126,60 @@ public class NotificationDispatcher {
             deliver(u, store(u.getId(), NotificationType.NEW_POLL, e.authorId(), e.poll().id(), question),
                     Category.POLLS, msg);
         }
+    }
+
+    // ---------- noise announcements ----------
+
+    /** Sent to everyone (only the push master switch applies): the point is that nobody is surprised. */
+    @Async
+    @TransactionalEventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void on(AnnouncementCreatedEvent e) {
+        AnnouncementDto a = e.announcement();
+        String when = when(a);
+        String body = a.note() == null ? when : when + " · " + snippet(a.note());
+        PushMessage msg = new PushMessage(kindLabel(a) + " · apt " + a.author().apartment(), body, "/announcements",
+                "announcement-" + a.id());
+        for (User u : activeMembersExcept(e.entranceId(), a.author().id())) {
+            deliver(u, store(u.getId(), NotificationType.NEW_ANNOUNCEMENT, a.author().id(), a.id(), when),
+                    Category.ALWAYS, msg);
+        }
+    }
+
+    // ---------- lost & found ----------
+
+    @Async
+    @TransactionalEventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void on(LostFoundCreatedEvent e) {
+        LostFoundDto item = e.item();
+        String title = snippet(item.title());
+        String where = item.location() == null ? "" : " · " + snippet(item.location());
+        PushMessage msg = new PushMessage(item.kind() == LostFoundKind.FOUND ? "Found in the building" : "Lost",
+                title + where, "/lost-found", "lost-found-" + item.id());
+        for (User u : activeMembersExcept(e.entranceId(), item.author().id())) {
+            deliver(u, store(u.getId(), NotificationType.NEW_LOST_FOUND, item.author().id(), item.id(),
+                    item.kind() + ": " + title), Category.POSTS, msg);
+        }
+    }
+
+    @Async
+    @TransactionalEventListener
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void on(LostFoundRespondedEvent e) {
+        users.findById(e.authorId()).filter(User::isActive).ifPresent(author -> {
+            User responder = users.findById(e.responderId()).orElse(null);
+            if (responder == null) {
+                return;
+            }
+            String name = responder.getFirstName() + " " + responder.getLastName();
+            String title = snippet(e.title());
+            String body = e.kind() == LostFoundKind.FOUND ? name + " says it's theirs: " + title
+                    : name + " found it: " + title;
+            deliver(author, store(author.getId(), NotificationType.LOST_FOUND_RESPONSE, e.responderId(), e.itemId(),
+                    title), Category.ALWAYS, new PushMessage("Lost & found", body, "/lost-found",
+                    "lost-found-response-" + e.itemId()));
+        });
     }
 
     // ---------- chat (push only) ----------
@@ -233,6 +294,25 @@ public class NotificationDispatcher {
         return users.findByEntrance_IdAndStatusOrderByCreatedAtAsc(entranceId, UserStatus.ACTIVE).stream()
                 .filter(u -> !u.getId().equals(excludedUserId))
                 .toList();
+    }
+
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d.M.");
+
+    /** e.g. "1.12.–5.12. · 08:00–16:00" or "6.12. · all day". */
+    private static String when(AnnouncementDto a) {
+        String days = DAY.format(a.startDate()) + (a.endDate().equals(a.startDate()) ? ""
+                : "–" + DAY.format(a.endDate()));
+        String hours = a.fromTime() == null ? "all day" : a.fromTime() + "–" + a.toTime();
+        return days + " · " + hours;
+    }
+
+    private static String kindLabel(AnnouncementDto a) {
+        return switch (a.kind()) {
+            case RENOVATION -> "Renovation";
+            case CELEBRATION -> "Celebration";
+            case MOVING -> "Moving";
+            case OTHER -> "Noise notice";
+        };
     }
 
     private static String fullName(ResidentDto r) {

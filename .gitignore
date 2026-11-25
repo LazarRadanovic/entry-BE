@@ -40,3 +40,6 @@ uploads/
 *.swp
 todo-enetry.txt
 .to-do-entry-project.txt
+
+# founder pack business review (local only)
+/founder/

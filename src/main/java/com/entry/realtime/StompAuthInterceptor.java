@@ -56,9 +56,6 @@ public class StompAuthInterceptor implements ChannelInterceptor {
             if (!user.isActive()) {
                 throw new MessageDeliveryException("Membership is not active");
             }
-            if (user.entranceLocked()) {
-                throw new MessageDeliveryException("Subscription required");
-            }
             return new AuthUserAuthentication(user, jwt.getTokenValue());
         } catch (JwtException e) {
             throw new MessageDeliveryException("Invalid or expired access token");

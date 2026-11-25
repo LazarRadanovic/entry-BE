@@ -78,17 +78,27 @@ class BillingIntegrationTest {
     }
 
     @Test
-    void expiredTrialLocksTheEntranceUntilSubscribed() throws Exception {
+    void expiredTrialMakesTheEntranceReadOnlyUntilSubscribed() throws Exception {
         expireTrial();
 
-        mvc.perform(get("/api/posts").header("Authorization", resident.bearer()))
-                .andExpect(status().isPaymentRequired())
-                .andExpect(jsonPath("$.code").value("SUBSCRIPTION_REQUIRED"));
-        // still reachable while locked
+        // everything can still be read
+        mvc.perform(get("/api/posts").header("Authorization", resident.bearer())).andExpect(status().isOk());
+        mvc.perform(get("/api/costs").header("Authorization", resident.bearer())).andExpect(status().isOk());
         mvc.perform(get("/api/users/me").header("Authorization", resident.bearer())).andExpect(status().isOk());
         mvc.perform(get("/api/billing").header("Authorization", resident.bearer()))
                 .andExpect(jsonPath("$.state").value("EXPIRED"))
-                .andExpect(jsonPath("$.accessAllowed").value(false));
+                .andExpect(jsonPath("$.readOnly").value(true));
+        // ...but nothing can be posted or changed, by residents or admins
+        mvc.perform(post("/api/posts").header("Authorization", resident.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"text\": \"Hello\"}"))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(jsonPath("$.code").value("SUBSCRIPTION_REQUIRED"));
+        mvc.perform(post("/api/polls").header("Authorization", admin.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"question\": \"Paint?\"}"))
+                .andExpect(status().isPaymentRequired());
+        // own notifications can still be marked read
+        mvc.perform(post("/api/notifications/read-all").header("Authorization", resident.bearer()))
+                .andExpect(status().is2xxSuccessful());
 
         // admin subscribes: Checkout, then Stripe sends a webhook
         when(stripe.createCustomer(anyString(), anyString(), any())).thenReturn("cus_123");
@@ -105,21 +115,26 @@ class BillingIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"customer.subscription.created\"}"))
                 .andExpect(status().isOk());
 
-        mvc.perform(get("/api/posts").header("Authorization", resident.bearer())).andExpect(status().isOk());
+        mvc.perform(post("/api/posts").header("Authorization", resident.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"text\": \"Hello\"}"))
+                .andExpect(status().isCreated());
         mvc.perform(get("/api/billing").header("Authorization", admin.bearer()))
                 .andExpect(jsonPath("$.state").value("ACTIVE"))
+                .andExpect(jsonPath("$.readOnly").value(false))
                 .andExpect(jsonPath("$.canManage").value(true))
                 .andExpect(jsonPath("$.canSubscribe").value(false));
 
-        // a cancelled subscription whose paid period is over locks it again
+        // a cancelled subscription whose paid period is over makes it read-only again
         when(stripe.retrieveSubscription("sub_1")).thenReturn(Optional.of(new SubscriptionSnapshot("sub_1",
                 "cus_123", "canceled", Instant.now().minus(1, ChronoUnit.DAYS), false, admin.entranceId())));
         when(stripe.verifyWebhook(anyString(), eq("t=2,v1=good")))
                 .thenReturn(new WebhookEvent("customer.subscription.deleted", "sub_1", "cus_123", null));
         mvc.perform(post("/api/billing/webhook").header("Stripe-Signature", "t=2,v1=good").content("{}"))
                 .andExpect(status().isOk());
-        mvc.perform(get("/api/posts").header("Authorization", resident.bearer()))
+        mvc.perform(post("/api/posts").header("Authorization", resident.bearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"text\": \"Hello again\"}"))
                 .andExpect(status().isPaymentRequired());
+        mvc.perform(get("/api/posts").header("Authorization", resident.bearer())).andExpect(status().isOk());
     }
 
     @Test
@@ -150,7 +165,7 @@ class BillingIntegrationTest {
         mvc.perform(post("/api/admin/billing/sync").header("Authorization", admin.bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("ACTIVE"))
-                .andExpect(jsonPath("$.accessAllowed").value(true));
+                .andExpect(jsonPath("$.readOnly").value(false));
     }
 
     @Test

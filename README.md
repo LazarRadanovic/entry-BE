@@ -35,8 +35,9 @@ Browsers only allow push on `https://` or `http://localhost`. On iOS, push works
 
 ### Subscriptions (optional): free trial, then Stripe
 Every new entrance gets a **free trial** (`BILLING_TRIAL_DAYS`, default 30). After that an entrance admin must
-subscribe. Otherwise the entrance is **paused**: residents see "ask your admin", admins can only open the
-Subscription page, and the API answers `402 SUBSCRIPTION_REQUIRED`. Nothing is deleted. Admins get reminders 7, 3
+subscribe. Otherwise the entrance becomes **read-only**: everyone can still open and read everything (feed, chat,
+costs, polls…) and gets live updates, but posting or changing anything answers `402 SUBSCRIPTION_REQUIRED` (own
+profile, push settings and marking notifications read still work). Nothing is deleted. Admins get reminders 7, 3
 and 1 days before the trial ends, plus a banner in the app.
 
 Without Stripe keys, billing is **off**: nothing is enforced and every entrance is free. To turn it on with Stripe
@@ -68,7 +69,7 @@ keep it in sync afterwards (renewals, failed payments, cancellations).
 | `BILLING_TRIAL_DAYS` | `30` | free trial length for new entrances |
 | `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` | empty | billing is enforced only when both are set |
 | `STRIPE_WEBHOOK_SECRET` | empty | `whsec_…`, for `/api/billing/webhook` |
-| `BILLING_PRICE_LABEL` | empty | text shown next to Subscribe, e.g. `€4.99 / month` |
+| `BILLING_PRICE_LABEL` | empty | text shown next to Subscribe, e.g. `€8.99 / mesečno` |
 | `APP_URL` | `http://localhost:4200` | frontend URL that Stripe redirects back to |
 
 ## Tests
@@ -91,7 +92,7 @@ keep it in sync afterwards (renewals, failed payments, cancellations).
   Responses contain **signed URLs** (`/api/files/{id}?variant=…&exp=…&sig=…`) that work directly in `<img src>`
   without a token. Storage sits behind a `StorageService` interface, so local disk can be swapped for MinIO/S3.
 - **Real time:** writes go through REST; changes are broadcast over STOMP after the DB commit (see below).
-- **Notifications:** stored for new posts, polls, comments on your posts, likes on your posts (grouped per post),
+- **Notifications:** stored for new posts, polls, noise announcements (pushed regardless of category settings), lost & found posts, responses to your lost & found post, comments on your posts, likes on your posts (grouped per post),
   join requests (to admins) and approvals. Online users receive them over STOMP; offline users get a Web Push,
   filtered by their settings. Chat messages are push-only (not stored).
 - **Errors:** RFC 9457 `application/problem+json` with an extra `code` field (and `errors` for validation failures).
@@ -146,6 +147,16 @@ with `?cursor=…`. `size` is optional.
 | GET | `/api/craftsmen?trade=` | most recommended first |
 | POST / PUT / DELETE | `/api/craftsmen`, `/api/craftsmen/{id}` | `{name, trade, phone, email?, website?, description?, photoFileId?}` (photo from `POST /api/files`); edit: author or admin |
 | PUT / DELETE | `/api/craftsmen/{id}/recommend` | → `{craftsmanId, recommendations, recommendedByMe}` |
+| **Noise announcements** ("I'm renovating / having a celebration") | | |
+| GET | `/api/announcements?status=ACTIVE\|PAST` | ACTIVE = ongoing or upcoming (soonest first); each has `author` (with floor/apartment) and `ongoing` |
+| POST | `/api/announcements` | `{kind: RENOVATION\|CELEBRATION\|MOVING\|OTHER, startDate, endDate, fromTime?, toTime?, note?}`; dates inclusive (`2026-12-01`), hours `08:00` (both or neither = all day; `toTime < fromTime` = past midnight); at most 31 days, 90 days ahead; 409 `TOO_MANY_ANNOUNCEMENTS` above 2 active per resident. Notifies every neighbour |
+| GET / PUT / DELETE | `/api/announcements/{id}` | PUT/DELETE: author or admin; an announcement that already started can keep its start date |
+| **Lost & found** | | |
+| GET | `/api/lost-found?status=OPEN\|RESOLVED&kind=FOUND\|LOST` | newest first; each has `author`, `photo`, `responders`, `resolvedAt` |
+| POST | `/api/lost-found` | `{kind: FOUND\|LOST, category: KEYS\|PACKAGE\|PET\|TOY\|DOCUMENTS\|CLOTHING\|OTHER, title, description?, location?, photoFileId?}`; notifies every neighbour |
+| GET / PUT / DELETE | `/api/lost-found/{id}` | PUT/DELETE: author or admin |
+| PUT / DELETE | `/api/lost-found/{id}/response` | "it's mine" (FOUND) / "I found it" (LOST); not on your own post (400 `OWN_ITEM`), not once resolved (409 `ITEM_RESOLVED`); tells the author once |
+| PUT / DELETE | `/api/lost-found/{id}/resolved` | author or admin: mark returned/found, or reopen |
 | **Notifications** | | |
 | GET | `/api/notifications?cursor=&size=` | |
 | GET | `/api/notifications/unread-count` | |
@@ -155,7 +166,7 @@ with `?cursor=…`. `size` is optional.
 | GET | `/api/push/vapid-public-key` | `{enabled, publicKey}` |
 | POST / DELETE | `/api/push/subscriptions` | body = `PushSubscription.toJSON()` / `{endpoint}` |
 | **Billing** | | |
-| GET | `/api/billing` | `{enabled, state: TRIAL\|ACTIVE\|PAST_DUE\|EXPIRED\|FREE, accessAllowed, trialDaysLeft, …}` |
+| GET | `/api/billing` | `{enabled, state: TRIAL\|ACTIVE\|PAST_DUE\|EXPIRED\|FREE, readOnly, trialDaysLeft, …}` |
 | POST | `/api/admin/billing/checkout` | admin → `{url}` of Stripe Checkout |
 | POST | `/api/admin/billing/portal` | admin → `{url}` of the Stripe Billing Portal |
 | POST | `/api/admin/billing/sync` | admin: re-read the subscription from Stripe |
@@ -176,6 +187,8 @@ Only active members can connect, and only to their own entrance's topics. Each m
 | `/topic/entrance/{entranceId}/feed` | `POST_CREATED` (PostDto), `POST_DELETED` `{postId}`, `POST_STATS` `{postId, likeCount, commentCount}`, `COMMENT_CREATED` (CommentDto) |
 | `/topic/entrance/{entranceId}/chat` | `MESSAGE_CREATED` (ChatMessageDto) |
 | `/topic/entrance/{entranceId}/polls` | `POLL_CREATED` (PollDto), `POLL_RESULTS` `{pollId, yesCount, noCount, totalVotes, yesPercent, noPercent}`, `POLL_DELETED` `{pollId}` |
+| `/topic/entrance/{entranceId}/announcements` | `ANNOUNCEMENT_CREATED` / `ANNOUNCEMENT_UPDATED` (AnnouncementDto), `ANNOUNCEMENT_DELETED` `{announcementId}` |
+| `/topic/entrance/{entranceId}/lost-found` | `LOST_FOUND_CREATED` / `LOST_FOUND_UPDATED` (LostFoundDto), `LOST_FOUND_DELETED` `{itemId}` |
 | `/topic/entrance/{entranceId}/fees` | `FEES_UPDATED` `{}` (a cost, payment or apartment changed: reload) |
 | `/topic/entrance/{entranceId}/presence` | `PRESENCE` `{userId, online, onlineUserIds}` |
 | `/user/queue/notifications` | `NOTIFICATION` (NotificationDto) |

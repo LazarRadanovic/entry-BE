@@ -31,7 +31,7 @@ public class AuthUserJwtConverter implements Converter<Jwt, AbstractAuthenticati
             throw new InvalidBearerTokenException("Invalid token subject");
         }
         return users.findWithEntranceById(id)
-                .map(u -> AuthUser.from(u, !billing.accessAllowed(u.getEntrance())))
+                .map(u -> AuthUser.from(u, billing.readOnly(u.getEntrance())))
                 .orElseThrow(() -> new InvalidBearerTokenException("User no longer exists"));
     }
 }
